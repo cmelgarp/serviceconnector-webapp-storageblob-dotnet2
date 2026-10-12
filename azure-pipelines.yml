@@ -1,0 +1,52 @@
+trigger:
+- main
+
+pool:
+  vmImage: 'windows-latest'
+
+variables:
+  buildConfiguration: 'Release'
+  dotnetVersion: '9.x'
+  azureSubscription: 'MIA_connection'
+  appName: 'storagecontainerconnector'
+
+steps:
+- task: UseDotNet@2
+  displayName: 'Instalar .NET 9 SDK'
+  inputs:
+    packageType: 'sdk'
+    version: '$(dotnetVersion)'
+
+- task: DotNetCoreCLI@2
+  displayName: 'Restaurar dependencias'
+  inputs:
+    command: 'restore'
+    projects: '**/*.csproj'
+
+- powershell: |
+    Copy-Item ".env.production" ".env" -Force
+  displayName: 'Configurar .env de producción'
+
+- task: DotNetCoreCLI@2
+  displayName: 'Compilar aplicación'
+  inputs:
+    command: 'build'
+    projects: '**/*.csproj'
+    arguments: '--configuration $(buildConfiguration) --no-restore'
+
+- task: DotNetCoreCLI@2
+  displayName: 'Publicar aplicación'
+  inputs:
+    command: 'publish'
+    publishWebProjects: false
+    projects: '**/*.csproj'
+    arguments: '--configuration $(buildConfiguration) --output $(Build.ArtifactStagingDirectory)/publish --no-build'
+    zipAfterPublish: true
+
+- task: AzureWebApp@1
+  displayName: 'Desplegar en Azure App Service'
+  inputs:
+    azureSubscription: '$(azureSubscription)'
+    appType: 'webApp'
+    appName: 'storagecontainerconnector'
+    package: '$(Build.ArtifactStagingDirectory)/publish/**/*.zip'
